@@ -1,0 +1,46 @@
+@media (min-width: 1021px) {
+    .css-eztut6 {
+        width: 25% !important;
+        flex-grow: 0 !important;
+    }
+}
+@media (min-width: 624px) and (max-width: 1020px) {
+    .css-eztut6 {
+        width: 33% !important;
+        flex-grow: 0 !important;
+    }
+}
+@media (min-width: 450px) and (max-width: 624px) {
+    .css-eztut6 {
+        width: 50% !important;
+        flex-grow: 0 !important;
+    }
+}
+
+.css-9hd67m {
+    display: flex;
+    padding-right: 0 !important;
+}
+
+.css-mgq8yx {
+    flex-grow: 1;
+}
+
+.css-9hd67m >button {
+    position: relative !important;
+}
+
+.clear-button {
+    background-color: white;
+    border-radius: 4px;
+    border: 2px solid #3C475B;
+    font-weight: 400;
+    color: #3C475B;
+    font-size: 16px;
+    align-self: flex-start;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.clear-button:hover {
+    background-color: #f0f0f0;
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24px" height="24px">
+    <g stroke="#fff" stroke-linecap="round" stroke-linejoin="round" transform="matrix(1.153397, 0, 0, 1.153397, -1.840759, -1.840759)">
+        <path d="M 6.042 17.958 L 17.958 6.042" style="transform-origin: 50% 50%; stroke-width: 2.5px;" transform="matrix(0, 1, -1, 0, 0, 0.000001)"/>
+        <path d="M 6.042 6.042 L 17.958 17.958" style="transform-origin: 50% 50%; stroke-width: 2.5px;" transform="matrix(0, 1, -1, 0, 0, 0.000001)"/>
+    </g>
+</svg>

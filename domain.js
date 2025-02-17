@@ -1,9 +1,10 @@
 const parser = new DOMParser();
 
-const chromeStorageKeys = ['excludeKeys', 'strataMax', 'preferences', 'otherPreference'];
+const chromeStorageKeys = ['excludeKeys', 'strataMax', 'preferences', 'otherPreference', 'blacklist'];
 
 const strataRegex = /(?<=strata.*)(\d+(?:,\d{3})*(?:\.\d{1,2})?)/i;
-const strataMaxValue = 1000;
+const strataMaxValue = 2000;
+
 const preferencesMap = new Map([
     ['Gym', 'gym|fitness.{0,10}center|exercise'],
     ['Pool', 'pool|swimming|jacuzzi|hot.{0,10}tub'],
@@ -11,13 +12,32 @@ const preferencesMap = new Map([
     ['Dishwasher', 'dishwasher'],
     ['Dryer', 'dryer'],
     ['Glazed Windows', 'double.{0,10}glazed|glazed.{0,10}window|soundproof'],
-    ['Electric Stove', '(electric|induction){0,10}{stove|cooktop}']
+    ['Electric Stove', '(electric|induction){0,10}{stove|cook\s?top}']
 ]);
-const preferredAllColor = '#e7c94f';
-const preferredSomeColor = '#a6d035';
+
+const preferredAllColor = '#e7bc4f';
+const preferredHalfColor = '#e2e74f';
+const preferredSomeColor = '#9cc22e';
+const preferredLittleColor = '#6daf25';
+
+const urlParams = new URLSearchParams(window.location.search);
 
 const isHome = window.location.href === 'https://www.domain.com.au/';
+const isListing = /^https:\/\/www\.domain\.com\.au\/(?!sale|rent)(.+)/.test(window.location.href);
+const isSaleOrRent = /^https:\/\/www\.domain\.com\.au\/(sale|rent)/.test(window.location.href);
+const isShortlist = window.location.href.startsWith('https://www.domain.com.au/user/shortlist')
+const isBlacklist = (urlParams.get('blacklist') ?? '0') === '1';
+
 let isStudioType;
+
+let profileButton;
+
+const crossSvg = `
+                <g stroke-linecap="round" stroke-linejoin="round" transform="matrix(1.153397, 0, 0, 1.153397, -1.840759, -1.840759)">
+                    <path d="M 6.042 17.958 L 17.958 6.042" style="transform-origin: 50% 50%; stroke-width: 2.5px;" transform="matrix(0, 1, -1, 0, 0, 0.000001)"/>
+                    <path d="M 6.042 6.042 L 17.958 17.958" style="transform-origin: 50% 50%; stroke-width: 2.5px;" transform="matrix(0, 1, -1, 0, 0, 0.000001)"/>
+                </g>
+                `;
 
 let listingCoords = {}
 let listings;
@@ -25,7 +45,7 @@ let listings;
 const listObserver = new MutationObserver(async (mutations) => {
     for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-            await parseListings(Array.from(mutation.addedNodes)
+            await parseCards(Array.from(mutation.addedNodes)
                 .filter(marker => marker.nodeType === Node.ELEMENT_NODE));
         }
     }
@@ -54,28 +74,125 @@ console.log('Domain extension loaded');
 })();
 
 async function injectDoc() {
-    if (!isHome) { // *://www.domain.com.au/sale
-        await injectBase();
-        await injectSearch();
-    } else { // *://www.domain.com.au
+    await injectBase();
+
+    if (isHome) { // *://www.domain.com.au
         const filterButton = document.querySelector('button[data-testid*="search-filters-button"]')
         filterButton.addEventListener('click', () => {
             const observer = new MutationObserver(() => {
                 const filters = document.querySelectorAll('[data-testid*="dynamic-search-filters"]');
                 if (filters.length > 0) {
-                    injectBase();
+                    injectHome();
                     observer.disconnect();
                 }
             })
             observer.observe(document.body, { childList: true, subtree: true });
         })
+    } else if (isShortlist) { // *://www.domain.com.au/user/shortlist?blacklist=1
+        if (isBlacklist) {
+            await injectBlacklist();
+        }
+    } else if (isListing) { // *://www.domain.com.au/[listing-address]-[listing-id]
+        await injectListing();
+    } else if (isSaleOrRent) { // *://www.domain.com.au/sale or *://www.domain.com.au/rent
+        await injectHome();
+        await injectSearch();
     }
 }
 
 async function injectBase() {
+    const profileMenu = document.querySelector('nav').firstChild;
+
+    profileButton = document.querySelector('button[aria-label="User profile"]');
+    if (profileButton) {
+        profileButton.addEventListener('click', () => handleProfileClicked(profileMenu));
+    }
+    const navObserver = new MutationObserver(async () => {
+        const newProfileButton = document.querySelector('button[aria-label="User profile"]');
+        if (newProfileButton && !document.contains(profileButton)) {
+            profileButton = newProfileButton;
+            profileButton.addEventListener('click', () => handleProfileClicked(profileMenu));
+        }
+    });
+    navObserver.observe(profileMenu, { childList: true, subtree: true });
+}
+
+function handleProfileClicked(profileMenu) {
+    const profileObserver = new MutationObserver(async () => {
+        const memberDropdown = document.querySelector('[data-testid="header-member__dropdown"]');
+        if (!memberDropdown) return;
+        const dropdownList = memberDropdown.querySelector('ul');
+        if (!dropdownList) return;
+
+        if (!dropdownList.querySelector('.blacklist-item')) {
+            dropdownList.children[0].after(createBlacklistItem());
+        }
+        profileObserver.disconnect();
+    });
+    profileObserver.observe(profileMenu, {childList: true, subtree: true});
+}
+
+function createBlacklistItem() {
+    const item = document.createElement('li');
+    item.classList.add('blacklist-item', 'css-nec8yl');
+
+    const anchor = document.createElement('a');
+    anchor.classList.add('css-10ncok4', 'css-mzmifu');
+    anchor.href = 'https://www.domain.com.au/user/shortlist?blacklist=1';
+    item.appendChild(anchor);
+
+    anchor.textContent = 'Blacklist';
+
+    const svg = createSvg();
+    svg.innerHTML = crossSvg;
+    anchor.prepend(svg);
+
+    const span = document.createElement('span');
+    span.classList.add('css-1cmks7q');
+    anchor.appendChild(span);
+    getDataWithRetry(['blacklist']).then(({ blacklist }) => {
+        const len = blacklist?.length ?? 0;
+        span.textContent = len;
+        span.style.display = len ? '' : 'none';
+    });
+    chrome.storage.local.onChanged.addListener(({blacklist}) => {
+        const len = blacklist?.length ?? 0;
+        span.textContent = len;
+        span.style.display = len ? '' : 'none';
+    });
+
+    svg.style.stroke = isBlacklist ? '#0EA800' : '#3C475B';
+    anchor.style.color = isBlacklist ? '#0EA800' : '#3C475B';
+    span.style.color = isBlacklist ? '#0EA800' : '#3C475B';
+
+    if (!isBlacklist) {
+        anchor.addEventListener('mouseenter', () => {
+            svg.style.stroke = '#0EA800';
+            anchor.style.color = '#0EA800';
+            span.style.color = '#0EA800';
+        });
+        anchor.addEventListener('mouseleave', () => {
+            svg.style.stroke = '#3C475B';
+            anchor.style.color = '#3C475B';
+            span.style.color = '#3C475B';
+        });
+    }
+    return item;
+}
+
+function createSvg() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.classList.add('domain-icon', 'css-jeyium');
+    return svg;
+}
+
+async function injectHome() {
     //await loadFiltersFromURL();
 
     const keywordDiv = document.querySelector('[data-testid="dynamic-search-filters__keywords"]');
+
     const includeH3 = keywordDiv.children[0];
 
     const excludeH3 = includeH3.cloneNode(true);
@@ -89,21 +206,18 @@ async function injectBase() {
 
     keywordDiv.append(excludeH3, excludeInput);
 
-    chrome.storage.local.get('excludeKeys', (data) => excludeInput.value = data.excludeKeys ?? '')
+    chrome.storage.local.get('excludeKeys', (data) => excludeInput.value = data.excludeKeys ?? '');
     excludeInput.addEventListener('input', async (event) => {
         await chrome.storage.local.set({ excludeKeys: event.target.value });
         //await saveFiltersToURL();
-    })
+    });
     chrome.storage.local.onChanged.addListener(({ exclude }) => {
         if (exclude) excludeInput.value = exclude.newValue ?? '';
-    })
+    });
 
     // Modify price and strata slider filters
     const priceDivs = document.querySelectorAll('[data-testid="dynamic-search-filters__price-range"]');
     for (const priceDiv of priceDivs) {
-        const priceH3 = priceDiv.children[0];
-        priceH3.textContent = 'Price (Weekly)'
-
         const strataDiv = priceDiv.cloneNode(true);
         const strataH3 = strataDiv.children[0];
         strataH3.textContent = 'Strata Fees (Quarterly)'
@@ -114,11 +228,11 @@ async function injectBase() {
     // Modify features and preferences checkbox filters
     const featureDiv = document.querySelector('[data-testid="dynamic-search-filters__feature-options"]');
     const featureH3 = featureDiv.children[0];
-    featureH3.textContent = 'Must-Haves'
+    featureH3.textContent = 'Must-Haves';
 
     const preferenceDiv = featureDiv.cloneNode(true);
     const preferenceH3 = preferenceDiv.children[0];
-    preferenceH3.textContent = 'Could-Haves'
+    preferenceH3.textContent = 'Could-Haves';
 
     const prefabCheckbox = preferenceDiv.children[1];
     for (let i = preferenceDiv.children.length - 1; i > 0; i--) {
@@ -134,18 +248,18 @@ async function injectBase() {
     otherPreferenceInput.placeholder = 'Other preferences';
     preferenceDiv.append(otherPreferenceInput);
 
-    chrome.storage.local.get('otherPreference', (data) => otherPreferenceInput.value = data.otherPreference ?? '')
+    chrome.storage.local.get('otherPreference', (data) => otherPreferenceInput.value = data.otherPreference ?? '');
     otherPreferenceInput.addEventListener('input', async (event) => {
         await chrome.storage.local.set({ otherPreference: event.target.value });
         //await saveFiltersToURL();
-    })
+    });
     chrome.storage.local.onChanged.addListener(({ otherPreference }) => {
         if (otherPreference) otherPreferenceInput.value = otherPreference.newValue ?? '';
-    })
+    });
 
     const clearButtons = document.querySelectorAll('button[aria-label="Clear all filter selections"]');
     for (const button of clearButtons) {
-        button.addEventListener('click', async (event) => {
+        button.addEventListener('click', async () => {
             await chrome.storage.local.set({
                 preferences: [],
                 strataMax: strataMaxValue,
@@ -159,12 +273,57 @@ async function injectBase() {
     featureDiv.after(preferenceDiv);
 }
 
+async function injectListing() {
+    const buttonGroup = document.querySelector('[data-testid="listing-details__gallery-buttons-group"]');
+    const shortlistButton = document.querySelector('[data-testid^="listing-details__shortlist-button"]');
+    if (shortlistButton) {
+        const blacklistButton = shortlistButton.cloneNode(true);
+        blacklistButton.setAttribute('data-testid', 'listing-details__blacklist-button');
+        blacklistButton.classList.add('css-1ayo4s1');
+        blacklistButton.classList.remove('css-6elhz5');
+
+        const blacklistSvg = blacklistButton.children[0];
+        blacklistSvg.setAttribute('data-testid', '');
+        blacklistSvg.innerHTML = crossSvg;
+
+        blacklistButton.children[1].textContent = 'Blacklist';
+
+        let isBlacklisted;
+        const baseColor = '#3c475b';
+        const activeColor = '#ffa200';
+
+        const url = window.location.origin + window.location.pathname;
+
+        chrome.storage.local.get('blacklist', ({ blacklist }) => {
+            isBlacklisted = updateBlacklist(blacklistButton, blacklist ?? [], url,
+                false, baseColor, activeColor, activeColor);
+        });
+        blacklistButton.addEventListener('click', function (event) {
+            chrome.storage.local.get('blacklist', async ({ blacklist }) => {
+                let existingBlacklist = blacklist ?? [];
+                if (existingBlacklist.includes(url)) existingBlacklist.splice(existingBlacklist.indexOf(url), 1);
+                else existingBlacklist.push(url);
+
+                await chrome.storage.local.set({ blacklist: existingBlacklist });
+                //await saveFiltersToURL();
+            });
+            event.stopPropagation();
+            event.preventDefault();
+        });
+        chrome.storage.local.onChanged.addListener(({ blacklist }) => {
+            isBlacklisted = updateBlacklist(blacklistButton, blacklist.newValue ?? [], url,
+                false, baseColor, activeColor, activeColor);
+        });
+        buttonGroup.appendChild(blacklistButton);
+    }
+}
+
 async function injectSearch() {
-    const documentObserver = new MutationObserver(async () => {
-        await observeDocument();
+    const searchObserver = new MutationObserver(async () => {
+        await observeSearch();
         //await saveFiltersToURL();
     });
-    documentObserver.observe(document.body, { childList: true, subtree: true });
+    searchObserver.observe(document.querySelector('[data-testid="page"]'), { childList: true, subtree: true });
 
     const submitButtons = [
             ...document.querySelectorAll('button[type="submit"]'),
@@ -172,7 +331,7 @@ async function injectSearch() {
     ];
     for (const submitButton of submitButtons) {
         submitButton.addEventListener('click', async () => {
-            if (listings) await parseListings(listings.children);
+            if (listings) await parseCards(listings.children);
             if (markers) await parseMarkers(markers.children);
         });
     }
@@ -186,7 +345,7 @@ async function injectSearch() {
     handleTypeInput(allTypeInput, studioInput);
 }
 
-async function observeDocument() {
+async function observeSearch() {
     const hasListings = document.querySelector('[data-testid="results"]');
     const hasMarkers = document.querySelector('[data-testid="single-marker"]')?.parentElement?.parentElement;
 
@@ -196,7 +355,7 @@ async function observeDocument() {
         if (hasListings) {
             listings = hasListings;
             console.log('List found', listings.children.length, 'listings');
-            await parseListings(listings.children);
+            await parseCards(listings.children);
             listObserver.observe(listings, {childList: true, subtree: false});
         } else {
             console.log('No list found');
@@ -341,29 +500,157 @@ function createPreferenceCheckbox(container, prefab, name, regex) {
     checkboxLabel.textContent = name;
     container.appendChild(checkbox);
 
-    chrome.storage.local.get('preferences', (data) => {
-        checkboxInput.checked = data.preferences.includes(regex)
-    })
+    chrome.storage.local.get('preferences', ({ preferences }) => {
+        if (preferences) checkboxInput.checked = preferences.includes(regex)
+    });
     checkboxInput.addEventListener('input', () => {
-        chrome.storage.local.get('preferences', async (data) => {
-            let existingPreferences = data.preferences ?? [];
-            if (checkboxInput.checked) {
-                if (!existingPreferences.includes(regex)) existingPreferences.push(regex);
-            } else {
-                existingPreferences = existingPreferences.filter(item => item !== regex);
-            }
+        chrome.storage.local.get('preferences', async ({ preferences }) => {
+            let existingPreferences = preferences ?? [];
+
+            if (existingPreferences.includes(regex)) existingPreferences.splice(existingPreferences.indexOf(regex), 1);
+            else existingPreferences.push(regex);
+
             await chrome.storage.local.set({preferences: existingPreferences});
-            console.log(existingPreferences);
             //await saveFiltersToURL();
-        })
-    })
+        });
+    });
     chrome.storage.local.onChanged.addListener(({ preferences }) => {
         if (preferences) checkboxInput.checked = preferences.newValue.includes(regex);
-    })
+    });
 }
 
 function handleTypeInput(allTypeInput, studioInput) {
     isStudioType = (allTypeInput && allTypeInput.checked) || studioInput.checked;
+}
+
+async function injectBlacklist() {
+    const container = document.querySelector('#shortlist').children[0];
+    const title = container.children[0];
+    title.textContent = 'Your blacklist';
+    title.style.paddingBottom = '10px';
+    container.children[1].remove();
+    container.children[2].remove();
+
+    const titleWrapper = document.createElement('div');
+    titleWrapper.style.display = 'flex';
+    titleWrapper.appendChild(title);
+    title.style.flexGrow = '1';
+    container.appendChild(titleWrapper);
+
+    const clearButton = document.createElement('button');
+    clearButton.classList.add('clear-button');
+    clearButton.textContent = 'Clear All';
+
+    clearButton.addEventListener('click', () => {
+        chrome.storage.local.set({ blacklist: [] });
+    });
+    titleWrapper.appendChild(clearButton);
+
+    const list = document.createElement('div');
+    list.classList.add('css-1j3pg80');
+
+    const style = document.createElement('style');
+    style.textContent = `
+        @media (min-width: 1021px) {
+        .css-eztut6 {
+            width: 25%;
+            flex-grow: 0;
+          }
+        }
+        @media (min-width: 624px) and (max-width: 1020px) {
+        .css-eztut6 {
+            width: 33%;
+            flex-grow: 0;
+          }
+        }
+        @media (min-width: 450px) and (max-width: 624px) {
+        .css-eztut6 {
+            width: 50%;
+            flex-grow: 0;
+          }
+        }
+        .clear-button {
+          background-color: white;
+          border-radius: 4px;
+          border: 2px solid #3C475B;
+          font-weight: 400;
+          color: #3C475B;
+          font-size: 16px;
+          align-self: flex-start;
+          transition: background-color 0.2s ease-in-out;
+        }
+
+        .clear-button:hover {
+          background-color: #f0f0f0;
+        }
+    `;
+    document.head.appendChild(style);
+
+    chrome.storage.local.get('blacklist', async (data) => {
+        for (const blacklist of data.blacklist) {
+            const listingCard = createListingCard(blacklist, await parseListing(blacklist));
+            listingCard.id = blacklist;
+            list.appendChild(listingCard);
+        }
+    });
+    container.appendChild(list);
+
+    const documentObserver = new MutationObserver(async () => {
+        const memberDropdown = document.querySelector('[data-testid="shortlist__message_wrapper"]');
+        if (!memberDropdown) return;
+        memberDropdown.remove();
+        documentObserver.disconnect();
+    });
+    documentObserver.observe(document.body, { childList: true, subtree: true });
+
+    document.title = 'Blacklisted properties';
+}
+
+function createListingCard(url, content) {
+    const listingWrapper = document.createElement('div');
+    listingWrapper.classList.add('css-eztut6');
+
+    const listingContainer = document.createElement('div');
+    listingContainer.classList.add('css-1iszjo9');
+    listingContainer.style.paddingBottom = '0';
+
+    const imageContainer = document.createElement('div');
+    const image = document.createElement('img');
+    image.style.width = '100%';
+    image.src = content.images[0];
+    imageContainer.appendChild(image);
+
+    const infoContainer = document.createElement('div');
+    infoContainer.classList.add('css-1n74r2t');
+
+    const titleContainer = document.createElement('div');
+    titleContainer.classList.add('css-9hd67m');
+    const title = document.createElement('p');
+    title.classList.add('css-mgq8yx');
+    title.textContent = content.title;
+    titleContainer.appendChild(title);
+
+    const blacklist = createBlacklistButton(url, '#BBBEC4', '#fc0', '#ffa200');
+    titleContainer.appendChild(blacklist);
+    infoContainer.appendChild(titleContainer);
+
+    const addressContainer = document.createElement('a');
+    addressContainer.classList.add('css-1y2bib4');
+    addressContainer.href = url;
+    const address = document.createElement('h2');
+    address.classList.add('css-bqbbuf');
+    address.innerHTML = content.address.replace(', ', ',<br>');
+    addressContainer.appendChild(address);
+    infoContainer.appendChild(addressContainer);
+
+    const layoutContainer = document.createElement('div');
+    layoutContainer.classList.add('css-1t41ar7');
+
+    listingWrapper.appendChild(listingContainer);
+    listingContainer.appendChild(imageContainer);
+    listingContainer.appendChild(infoContainer);
+
+    return listingWrapper;
 }
 
 async function scheduleParseMarkers() {
@@ -381,7 +668,6 @@ async function parseMarkers(markers) {
     console.log('Started parsing', markers.length, 'markers');
 
     const data = await getDataWithRetry(chromeStorageKeys);
-    //if (!hasExtraFilters(data)) return;
 
     const pageData = JSON.parse(document.querySelector('#__NEXT_DATA__').textContent);
     const listingsMap = pageData.props.pageProps.componentProps.listingsMap;
@@ -413,17 +699,24 @@ async function parseMarkers(markers) {
 
     const listingPromises = Array.from(markerListings).map(async markerListing => {
         const {marker, nearestListing} = markerListing;
+        const blacklist = data.blacklist.includes(nearestListing.url);
+        if (blacklist) {
+            marker.style.display = 'none';
+            return marker;
+        }
+
         const content = await parseListing(nearestListing.url);
         const exclude = await excludeListing(data, content);
         marker.style.display = exclude ? 'none' : '';
+        if (exclude) return marker;
 
         const preferred = await preferListing(data, content);
-        const preferredColor = preferred === 1 ? preferredAllColor : preferredSomeColor;
+        const preferredColor = preferColor(preferred);
 
         const rects = marker.querySelectorAll('rect');
         for (const rect of rects) {
             if (window.getComputedStyle(rect).fill === 'rgb(124, 124, 123)') continue;
-            rect.style.fill = preferred > 0 ? preferredColor : '0B8000';
+            rect.style.fill = preferred > 0 ? preferredColor : '#0b6500';
         }
     });
     await Promise.all(listingPromises);
@@ -460,55 +753,181 @@ function findNearestListing(markerCoord) {
     return nearestListing;
 }
 
-async function parseListings(listings) {
-    if (listings.length === 0) return;
-    console.log('Started parsing', listings.length, 'listings');
+async function parseCards(cards) {
+    if (cards.length === 0) return;
+    console.log('Started parsing', cards.length, 'cards');
 
     const data = await getDataWithRetry(chromeStorageKeys);
-    //if (!hasExtraFilters(data)) return;
 
-    const listingPromises = Array.from(listings).map(async listing => {
-        const listingAnchor = listing.querySelector('a');
-        if (!listingAnchor) return;
+    const listings = new Map();
+    for (const card of cards) {
+        const anchors = card.getElementsByTagName('a');
+        for (const anchor of anchors) {
+            if (listings.has(anchor.href)) continue;
 
-        const content = await parseListing(listingAnchor.href)
+            const container = anchor.closest('div[data-testid="listing-card-child-listing"], li[data-testid^="listing"]');
+            if (container) listings.set(anchor.href, {
+                container: container,
+                anchor: anchor
+            });
+        }
+    }
+
+    const listingPromises = Array.from(listings).map(async ([href, listing]) => {
+        const content = await parseListing(href)
 
         const exclude = await excludeListing(data, content);
-        listing.style.display = exclude ? 'none' : '';
+        listing.container.style.display = exclude ? 'none' : '';
 
         const preferred = await preferListing(data, content);
-        const preferredColor = preferred === 1 ? preferredAllColor : preferredSomeColor;
+        const preferredColor = preferColor(preferred);
 
-        listing.style.backgroundColor = preferred > 0 ? preferredColor : 'transparent';
-        listing.style.padding = '10px';
-        listing.style.borderRadius = '10px';
+        if (listing.container.getAttribute('data-testid') === 'listing-card-child-listing') { // child listing
+            if (!listing.container.parentElement.classList.contains('child-listing-wrapper')) {
+                const wrapperOfWrapper = listing.container.parentElement;
+                wrapperOfWrapper.classList.add('css-hlnxku');
+
+                const wrapper = document.createElement('div');
+                wrapper.classList.add('child-listing-wrapper');
+                listing.container.classList.remove('css-hlnxku');
+                listing.anchor.style.textDecoration = 'none';
+                listing.anchor.style.color = 'inherit';
+                listing.container.style.backgroundColor = '#fff';
+
+                wrapper.appendChild(listing.container);
+                wrapperOfWrapper.appendChild(wrapper);
+            }
+            const wrapper = listing.container.parentElement;
+            wrapper.style.backgroundColor = preferred > 0 ? preferredColor : 'transparent';
+            wrapper.style.padding = '6px';
+            wrapper.style.borderRadius = '3px';
+
+        } else { // normal listing
+            listing.container.style.backgroundColor = preferred > 0 ? preferredColor : 'transparent';
+            listing.container.style.padding = '10px';
+            listing.container.style.borderRadius = '10px';
+        }
+
+        if (!listing.container.querySelector('button[data-testid="listing-card-blacklist"]')) {
+            const shortlistButton = listing.container.querySelector('button[data-testid^="listing-card-shortlist"]');
+            if (!shortlistButton) return;
+
+
+            shortlistButton.after(createBlacklistButton(href, '#fff', '#fc0', '#ffa200'));
+        }
     });
+
     await Promise.all(listingPromises);
-    console.log('Finished parsing', listings.length, 'listings');
+    console.log('Finished parsing', cards.length, 'cards');
+}
+
+function createBlacklistButton(href, baseColor, hoverColor, activeHoverColor) {
+    const button = document.createElement('button');
+    button.setAttribute('data-testid', 'listing-card-blacklist');
+    button.classList.add('css-9xfbzc');
+    const svg = createSvg();
+    svg.innerHTML = crossSvg;
+    button.appendChild(svg);
+
+    let isBlacklisted;
+    let isHovered = false;
+    button.style.transition = "stroke 0.2s ease-in-out";
+
+    chrome.storage.local.get('blacklist', ({ blacklist }) => {
+        isBlacklisted = updateBlacklist(button, blacklist ?? [], href,
+            isHovered, baseColor, hoverColor, activeHoverColor);
+    });
+    button.addEventListener('click', function (event) {
+        chrome.storage.local.get('blacklist', async ({ blacklist }) => {
+            let existingBlacklist = blacklist ?? [];
+            if (existingBlacklist.includes(href)) existingBlacklist.splice(existingBlacklist.indexOf(href), 1);
+            else existingBlacklist.push(href);
+
+            await chrome.storage.local.set({ blacklist: existingBlacklist });
+            //await saveFiltersToURL();
+        });
+        event.stopPropagation();
+        event.preventDefault();
+    });
+    chrome.storage.local.onChanged.addListener(({ blacklist }) => {
+        isBlacklisted = updateBlacklist(button, blacklist.newValue ?? [], href,
+            isHovered, baseColor, hoverColor, activeHoverColor);
+    });
+
+    button.addEventListener('mouseenter', function () {
+        button.style.stroke = isBlacklisted ? activeHoverColor : hoverColor;
+        isHovered = true;
+    });
+    button.addEventListener('mouseleave', function () {
+        button.style.stroke = isBlacklisted ? hoverColor : baseColor;
+        isHovered = false;
+    });
+    return button;
+}
+
+function updateBlacklist(button, blacklist, href, isHovered, baseColor, hoverColor, activeHoverColor) {
+    if (blacklist && blacklist.includes(href)) {
+        button.classList.remove('css-1n8tzw1');
+        button.classList.add('css-7teszh');
+        button.style.stroke = isHovered ? activeHoverColor : hoverColor;
+        return true;
+    } else {
+        button.classList.add('css-1n8tzw1');
+        button.classList.remove('css-7teszh');
+        button.style.stroke = isHovered ? hoverColor : baseColor;
+        return false;
+    }
 }
 
 async function parseListing(listingUrl) {
     try {
         const listingDoc = await fetchListing(listingUrl);
 
-        const [featuresDiv, descriptionDiv] = await Promise.all([
-            listingDoc.querySelector('[data-testid="listing-details__additional-features"]'),
-            listingDoc.querySelector('[data-testid="listing-details__description"]')
-        ])
+        const titleDiv = listingDoc.querySelector('[data-testid^="listing-details__listing-summary-title"]')
+            || listingDoc.querySelector('[data-testid^="listing-details__summary-title"]').firstChild;
+        const titleContent = titleDiv ? titleDiv.textContent : '';
 
+        const addressDiv = listingDoc.querySelector('[data-testid="listing-details__listing-summary-address"]')
+            || listingDoc.querySelector('[data-testid="listing-details__button-copy-wrapper"]').firstChild;
+        const addressContent = addressDiv ? addressDiv.textContent : '';
+
+        const layoutDivs = listingDoc.querySelectorAll('[data-testid="property-features-feature"]');
+        const keys = ['Beds', 'Baths', 'Parking']
+        const layout = {}
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            const text = layoutDivs[i].querySelector('[data-testid="property-features-text-container"]').textContent;
+            layout[key] = text.split(/\s+/)[0];
+        }
+        // keys: Beds, Baths, Parking
+
+        const imagesDiv = listingDoc.querySelector('[data-testid^="listing-details__gallery-preview"]');
+        const imgElements = imagesDiv ? Array.from(imagesDiv.getElementsByTagName('img')) : [];
+        const images = imgElements.map(img => img.src);
+
+        const featuresDiv = listingDoc.querySelector('[data-testid="listing-details__additional-features"]')
+            || listingDoc.querySelector('[data-testid="listing-details__listing-summary-key-selling-points-list"]');
         const featureContent = featuresDiv
             ? Array.from(featuresDiv.querySelectorAll('li'))
                 .map(item => item.textContent.trim())
                 .join(', ')
             : '';
 
+        const descriptionDiv = listingDoc.querySelector('[data-testid="listing-details__description"]');
         const descriptionContent = descriptionDiv
             ? Array.from(descriptionDiv.querySelectorAll('p, h3'))
                 .map(item => item.textContent.trim())
                 .join('\n')
             : '';
 
-        return `${featureContent.toLowerCase()}\n${descriptionContent.toLowerCase()}`;
+        return {
+            title: titleContent,
+            address: addressContent,
+            layout: layout,
+            images: images,
+            features: featureContent,
+            description: descriptionContent
+        }
     } catch (e) {
         console.error('Error parsing listing', listingUrl, e);
         return '';
@@ -535,17 +954,19 @@ async function fetchListing(listingUrl, retries = 3, delay = 1000) {
 
 async function excludeListing(data, content) {
     const excludeKeywords = (data.excludeKeys ?? '').toLowerCase().split(/\s*,\s*/);
-    if (!isStudioType) excludeKeywords.add('studio');
+    if (!isStudioType) excludeKeywords.push('studio');
+
+    const combinedContent = `${content.title}\n${content.features}\n${content.description}`.toLowerCase();
 
     // Search for excluded keywords
     for (const excludeKey of excludeKeywords) {
         if (excludeKey === '') continue;
-        if (content.includes(excludeKey)) return true;
+        if (combinedContent.includes(excludeKey)) return true;
     }
 
     // Search for strata fees
     if (data.strataMax < 1000) {
-        const match = strataRegex.exec(content);
+        const match = strataRegex.exec(combinedContent);
         if (match) {
             const strata = parseFloat(match[0].replace(/,/g, ''));
             if (strata > data.strataMax) return true;
@@ -556,10 +977,14 @@ async function excludeListing(data, content) {
 }
 
 async function preferListing(data, content) {
-    const preferences = data.preferences ?? [];
-    preferences.push(data.otherPreference);
+    const preferences = (data.preferences ?? []).slice();
+    const otherPreferences = (data.otherPreference ?? '').toLowerCase().split(/\s*,\s*/);
+    otherPreferences.forEach((preference) => preferences.push(preference));
+
     let preferred = 0;
     let allPreferred = preferences.length;
+
+    const combinedContent = `${content.title}\n${content.features}\n${content.description}`.toLowerCase();
 
     // Search for preferences
     for (const preference of preferences) {
@@ -567,19 +992,16 @@ async function preferListing(data, content) {
             allPreferred--;
             continue;
         }
-        if (content.match(preference)) preferred++;
+        if (combinedContent.match(preference)) preferred++;
     }
 
     return preferred / allPreferred;
 }
 
-function hasExtraFilters(data) {
-    // No filters, then don't parse
-    if (data.excludeKeys === '' && data.strataMax === strataMaxValue && data.preferences.length === 0
-        && isStudioType === true && data.otherPreference === '') {
-        console.log('No extra filters set, stopping parse');
-        return false;
-    }
-
-    return true;
+function preferColor(preferred) {
+    return preferred > 0.9 ? preferredAllColor :
+            preferred > 0.6 ? preferredHalfColor :
+            preferred > 0.4 ? preferredSomeColor :
+            preferred > 0.2 ? preferredLittleColor :
+            '#fff';
 }

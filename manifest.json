@@ -28,9 +28,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://www.domain.com.au/",
-        "*://www.domain.com.au/sale/*",
-        "*://www.domain.com.au/rent/*"
+        "*://www.domain.com.au/*"
       ],
       "js": ["domain.js"]
     }
@@ -38,7 +36,7 @@
   "web_accessible_resources": [
     {
       "matches": ["*://www.domain.com.au/*"],
-      "resources": ["domain.js"]
+      "resources": ["domain.js", "images/*"]
     }
   ]
 }

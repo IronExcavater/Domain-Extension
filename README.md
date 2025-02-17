@@ -1,4 +1,4 @@
-# 🏡 [Extra Domain Filters](https://chromewebstore.google.com/detail/extra-domain-filters/opblibcobnkicpdjkinngfcbjjnjldkg?authuser=0&hl=en-AU)
+# 🏡 [Extra Domain Filters](https://chromewebstore.google.com/detail/extra-domain-filters/opblibcobnkicpdjkinngfcbjjnjldkg)
 
 ## 🚀 Overview
 This browser extension supercharges domain.com.au by adding advanced filtering options, making it easier to find your dream property! 🎯
@@ -16,7 +16,7 @@ This browser extension supercharges domain.com.au by adding advanced filtering o
 
 ## 🛠 Installation
 ### 🔹 Chrome Web Store (Recommended)
-1. Visit the extension page: **[Extra Domain Filters](https://chromewebstore.google.com/detail/extra-domain-filters/opblibcobnkicpdjkinngfcbjjnjldkg?authuser=0&hl=en-AU)**
+1. Visit the extension page: **[Extra Domain Filters](https://chromewebstore.google.com/detail/extra-domain-filters/opblibcobnkicpdjkinngfcbjjnjldkg)**
 2. Click **Add to Chrome** and confirm the installation.
 
 ### 🔹 Manual Installation (Developer)

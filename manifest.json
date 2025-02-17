@@ -30,7 +30,8 @@
       "matches": [
         "*://www.domain.com.au/*"
       ],
-      "js": ["domain.js"]
+      "js": ["domain.js"],
+      "css": ["styles.css"]
     }
   ],
   "web_accessible_resources": [

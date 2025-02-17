@@ -42,11 +42,16 @@ const crossSvg = `
 let listingCoords = {}
 let listings;
 
+let parseCardsTimer;
+let cardChange = new Set();
 const listObserver = new MutationObserver(async (mutations) => {
     for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-            await parseCards(Array.from(mutation.addedNodes)
-                .filter(marker => marker.nodeType === Node.ELEMENT_NODE));
+            Array.from(mutation.addedNodes)
+                .filter(card => card.nodeType === Node.ELEMENT_NODE)
+                .forEach(card => cardChange.add(card));
+
+            await scheduleParseCards();
         }
     }
 });
@@ -101,23 +106,38 @@ async function injectDoc() {
 }
 
 async function injectBase() {
-    const profileMenu = document.querySelector('nav').firstChild;
+    const desktopMenu = document.querySelector('nav').firstChild;
+    const mobileMenu = document.querySelector('nav').firstChild;
 
-    profileButton = document.querySelector('button[aria-label="User profile"]');
-    if (profileButton) {
-        profileButton.addEventListener('click', () => handleProfileClicked(profileMenu));
-    }
-    const navObserver = new MutationObserver(async () => {
-        const newProfileButton = document.querySelector('button[aria-label="User profile"]');
-        if (newProfileButton && !document.contains(profileButton)) {
-            profileButton = newProfileButton;
-            profileButton.addEventListener('click', () => handleProfileClicked(profileMenu));
+    let desktopButton = document.querySelector('button[aria-label="User profile"]');
+    let mobileButton = document.querySelector('button[data-testid="mobile-nav__secondary-toggle"]');
+
+    if (desktopButton) desktopButton.addEventListener('click', () => handleDesktopMenu(desktopMenu));
+    if (mobileButton) mobileButton.addEventListener('click', () => handleMobileMenu());
+
+    const desktopMenuObserver = new MutationObserver(async () => {
+        const newDesktopButton = document.querySelector('button[aria-label="User profile"]');
+        if (newDesktopButton && !document.contains(desktopButton)) {
+            desktopButton = newDesktopButton;
+            desktopButton.addEventListener('click', () => handleDesktopMenu(desktopMenu));
         }
     });
-    navObserver.observe(profileMenu, { childList: true, subtree: true });
+    desktopMenuObserver.observe(desktopMenu, { childList: true, subtree: true });
+
+    const mobileMenuObserver = new MutationObserver(async () => {
+        const newMobileButton = document.querySelector('button[data-testid="mobile-nav__secondary-toggle"]');
+        if (newMobileButton && !document.contains(mobileButton)) {
+            mobileButton = newMobileButton;
+            mobileButton.addEventListener('click', () => handleMobileMenu());
+        }
+    });
+    mobileMenuObserver.observe(mobileMenu, { childList: true, subtree: true });
+
+
 }
 
-function handleProfileClicked(profileMenu) {
+function handleDesktopMenu(desktopMenu) {
+    console.log('Profile clicked');
     const profileObserver = new MutationObserver(async () => {
         const memberDropdown = document.querySelector('[data-testid="header-member__dropdown"]');
         if (!memberDropdown) return;
@@ -129,7 +149,18 @@ function handleProfileClicked(profileMenu) {
         }
         profileObserver.disconnect();
     });
-    profileObserver.observe(profileMenu, {childList: true, subtree: true});
+    profileObserver.observe(desktopMenu, {childList: true, subtree: true});
+}
+
+function handleMobileMenu() {
+    console.log('Profile clicked');
+    const memberDropdown = document.querySelector('nav[data-testid="mobile-nav"][class="css-1o8190c"]');
+    if (!memberDropdown) return;
+    const dropdownList = memberDropdown.querySelector('ul');
+    if (!dropdownList) return;
+    if (!dropdownList.querySelector('.blacklist-item')) {
+        dropdownList.children[1].after(createBlacklistItem());
+    }
 }
 
 function createBlacklistItem() {
@@ -319,6 +350,7 @@ async function injectListing() {
 }
 
 async function injectSearch() {
+    await observeSearch();
     const searchObserver = new MutationObserver(async () => {
         await observeSearch();
         //await saveFiltersToURL();
@@ -549,43 +581,6 @@ async function injectBlacklist() {
     const list = document.createElement('div');
     list.classList.add('css-1j3pg80');
 
-    const style = document.createElement('style');
-    style.textContent = `
-        @media (min-width: 1021px) {
-        .css-eztut6 {
-            width: 25%;
-            flex-grow: 0;
-          }
-        }
-        @media (min-width: 624px) and (max-width: 1020px) {
-        .css-eztut6 {
-            width: 33%;
-            flex-grow: 0;
-          }
-        }
-        @media (min-width: 450px) and (max-width: 624px) {
-        .css-eztut6 {
-            width: 50%;
-            flex-grow: 0;
-          }
-        }
-        .clear-button {
-          background-color: white;
-          border-radius: 4px;
-          border: 2px solid #3C475B;
-          font-weight: 400;
-          color: #3C475B;
-          font-size: 16px;
-          align-self: flex-start;
-          transition: background-color 0.2s ease-in-out;
-        }
-
-        .clear-button:hover {
-          background-color: #f0f0f0;
-        }
-    `;
-    document.head.appendChild(style);
-
     chrome.storage.local.get('blacklist', async (data) => {
         for (const blacklist of data.blacklist) {
             const listingCard = createListingCard(blacklist, await parseListing(blacklist));
@@ -753,6 +748,16 @@ function findNearestListing(markerCoord) {
     return nearestListing;
 }
 
+async function scheduleParseCards() {
+    clearTimeout(parseCardsTimer)
+
+    parseCardsTimer = setTimeout(async () => {
+        if (cardChange.size === 0) return;
+        await parseCards(cardChange);
+        cardChange.clear();
+    }, 500);
+}
+
 async function parseCards(cards) {
     if (cards.length === 0) return;
     console.log('Started parsing', cards.length, 'cards');
@@ -763,57 +768,59 @@ async function parseCards(cards) {
     for (const card of cards) {
         const anchors = card.getElementsByTagName('a');
         for (const anchor of anchors) {
-            if (listings.has(anchor.href)) continue;
-
-            const container = anchor.closest('div[data-testid="listing-card-child-listing"], li[data-testid^="listing"]');
-            if (container) listings.set(anchor.href, {
-                container: container,
-                anchor: anchor
-            });
+            const container = anchor.closest('div[data-testid="listing-card-child-listing"], li[data-testid^="listing"], li[data-testid="topspot"], div[class^="slick-slide"]');
+            if (!listings.has(container)) listings.set(container, anchor);
         }
     }
 
-    const listingPromises = Array.from(listings).map(async ([href, listing]) => {
-        const content = await parseListing(href)
+    const listingPromises = Array.from(listings).map(async ([container, anchor]) => {
+        const blacklist = data.blacklist.includes(anchor.href);
+        if (blacklist) {
+            container.style.display = 'none';
+            return;
+        }
+
+        const content = await parseListing(anchor.href)
 
         const exclude = await excludeListing(data, content);
-        listing.container.style.display = exclude ? 'none' : '';
+        container.style.display = exclude ? 'none' : '';
 
         const preferred = await preferListing(data, content);
         const preferredColor = preferColor(preferred);
 
-        if (listing.container.getAttribute('data-testid') === 'listing-card-child-listing') { // child listing
-            if (!listing.container.parentElement.classList.contains('child-listing-wrapper')) {
-                const wrapperOfWrapper = listing.container.parentElement;
-                wrapperOfWrapper.classList.add('css-hlnxku');
+        if (preferred > 0) {
+            if (container.getAttribute('data-testid') === 'listing-card-child-listing') { // child listing
+                if (!container.parentElement.classList.contains('child-listing-wrapper')) {
+                    const wrapperOfWrapper = container.parentElement;
+                    wrapperOfWrapper.classList.add('css-hlnxku');
 
-                const wrapper = document.createElement('div');
-                wrapper.classList.add('child-listing-wrapper');
-                listing.container.classList.remove('css-hlnxku');
-                listing.anchor.style.textDecoration = 'none';
-                listing.anchor.style.color = 'inherit';
-                listing.container.style.backgroundColor = '#fff';
+                    const wrapper = document.createElement('div');
+                    wrapper.classList.add('child-listing-wrapper');
+                    container.classList.remove('css-hlnxku');
+                    anchor.style.textDecoration = 'none';
+                    anchor.style.color = 'inherit';
+                    container.style.backgroundColor = '#fff';
 
-                wrapper.appendChild(listing.container);
-                wrapperOfWrapper.appendChild(wrapper);
+                    wrapper.appendChild(container);
+                    wrapperOfWrapper.appendChild(wrapper);
+                }
+                const wrapper = container.parentElement;
+                wrapper.style.backgroundColor = preferredColor;
+                wrapper.style.padding = '6px';
+
+            } else { // normal listing
+                container.style.backgroundColor = preferredColor;
+                container.style.padding = '10px';
             }
-            const wrapper = listing.container.parentElement;
-            wrapper.style.backgroundColor = preferred > 0 ? preferredColor : 'transparent';
-            wrapper.style.padding = '6px';
-            wrapper.style.borderRadius = '3px';
-
-        } else { // normal listing
-            listing.container.style.backgroundColor = preferred > 0 ? preferredColor : 'transparent';
-            listing.container.style.padding = '10px';
-            listing.container.style.borderRadius = '10px';
         }
 
-        if (!listing.container.querySelector('button[data-testid="listing-card-blacklist"]')) {
-            const shortlistButton = listing.container.querySelector('button[data-testid^="listing-card-shortlist"]');
+        if (!container.querySelector('button[data-testid="listing-card-blacklist"]')) {
+            const shortlistButton = container.querySelector('button[data-testid^="listing-card-shortlist"]');
             if (!shortlistButton) return;
 
-
-            shortlistButton.after(createBlacklistButton(href, '#fff', '#fc0', '#ffa200'));
+            const baseColor = shortlistButton.parentElement.getAttribute('data-testid') === 'listing-card-price-wrapper'
+                ? '#BBBEC4' : '#fff'
+            shortlistButton.after(createBlacklistButton(anchor.href, baseColor, '#fc0', '#ffa200'));
         }
     });
 
@@ -825,6 +832,10 @@ function createBlacklistButton(href, baseColor, hoverColor, activeHoverColor) {
     const button = document.createElement('button');
     button.setAttribute('data-testid', 'listing-card-blacklist');
     button.classList.add('css-9xfbzc');
+    button.style.background = 'none';
+    button.style.border = '0';
+    button.style.padding = '0';
+    button.style.margin = '3px';
     const svg = createSvg();
     svg.innerHTML = crossSvg;
     button.appendChild(svg);

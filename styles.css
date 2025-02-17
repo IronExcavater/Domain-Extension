@@ -17,6 +17,22 @@
     }
 }
 
+.css-1cmks7q {
+    border-radius: 10px;
+    line-height: 20px;
+    font-size: 14px;
+    background: #FAFBFC;
+    padding: 0 4px;
+    min-width: 20px;
+    height: 20px;
+    text-indent: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: currentcolor;
+    margin-left: auto;
+}
+
 .css-9hd67m {
     display: flex;
     padding-right: 0 !important;

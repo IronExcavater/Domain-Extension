@@ -1,30 +1,38 @@
-# Domain.com.au Enhanced Filtering Extension
+# 🏡 [Extra Domain Filters](https://chromewebstore.google.com/detail/extra-domain-filters/opblibcobnkicpdjkinngfcbjjnjldkg?authuser=0&hl=en-AU)
 
-## Overview
-This browser extension adds powerful filtering options to domain.com.au, helping you find better property listings with ease.
+## 🚀 Overview
+This browser extension supercharges domain.com.au by adding advanced filtering options, making it easier to find your dream property! 🎯
 
-## Features
-- **Preference Highlighting** – Properties matching your preferences are tinted yellow, with stronger tints for higher matches.
-- **Exclude Keywords** – Removes listings containing unwanted keywords in their descriptions.
-- **Studio Property Fix** – Ensures studios are correctly identified by checking descriptions, not just tags.
-- **Strata Fee Filter** – Adds a slider to exclude properties with excessively high strata fees.
-- **Map Integration** – Highlights preferred listings directly on the map.
-- **Persistent Filters** – Saves your preferences and filters between browsing sessions.
-- **Real-Time Updates** – Instantly applies changes as filters are adjusted.
+## ✨ Features
+- 🟡 **Preference Highlighting** – Highlights properties that match your preferences with a yellow tint, intensifying with stronger matches.
+- ❌ **Exclude Keywords** – Automatically hides listings containing unwanted keywords in their descriptions.
+- 🏢 **Studio Property Fix** – Ensures studios are correctly identified based on descriptions, not just tags.
+- 💰 **Strata Fee Filter** – Adds a slider to exclude properties with excessively high strata fees.
+- 🗺 **Map Integration** – Highlights preferred listings directly on the map for easy identification.
+- 🔄 **Persistent Filters** – Saves your filters and preferences across browsing sessions.
+- ⚡ **Real-Time Updates** – Instantly applies changes as filters are adjusted.
+- 🚫 **Blacklist Listings** – Allows you to hide specific listings you don't want to see.
+- 🗑 **Manage Blacklist** – Adds a dedicated page to remove blacklisted listings.
 
-## Installation
-1. Download or clone this repository.
-2. Load the extension in your browser's developer mode.
-   - Chrome: Navigate to `chrome://extensions/`, enable Developer Mode, and load the unpacked extension.
-   - Firefox: Open `about:debugging`, select "This Firefox" and load the manifest.
+## 🛠 Installation
+### 🔹 Chrome Web Store (Recommended)
+1. Visit the extension page: **[Extra Domain Filters](https://chromewebstore.google.com/detail/extra-domain-filters/opblibcobnkicpdjkinngfcbjjnjldkg?authuser=0&hl=en-AU)**
+2. Click **Add to Chrome** and confirm the installation.
 
-## Usage
-1. Open domain.com.au and search for properties.
-2. Use the additional filtering options in the UI to refine your search.
-3. Preferred listings will be highlighted, and unwanted listings will be removed automatically.
+### 🔹 Manual Installation (Developer)
+1. **Download or clone** this repository.
+2. **Load the unpacked extension** (root directory) in your browser’s extension developer mode.
 
-## Contributing
-There are many improvements that can be made, so feel free to submit issues or pull requests to improve the extension!
+## 🎯 Usage
+1. Search for properties on **[Domain.com.au](domain.com.au)**.
+2. Use the new filtering options in the menus to refine your search.
+3. Listings that include **preferences are highlighted** in tint between **green** (20% match) to **gold** (90% match).
+4. Listings that are **blacklisted or include excluded keywords are hidden** automatically from the page.
+4. Manage your **blacklist** through the user profile menu (top-right corner)
 
-## License
-This project is licensed under the MIT License.
+## 🤝 Contribute
+Want to make this extension even better? 🚀 Feel free to **submit issues** or **open a pull request** with your improvements!
+
+## 📜 License
+This project is licensed under the **MIT License**. 📄
+

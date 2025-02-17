@@ -24,7 +24,7 @@ This browser extension supercharges domain.com.au by adding advanced filtering o
 2. **Load the unpacked extension** (root directory) in your browser’s extension developer mode.
 
 ## 🎯 Usage
-1. Search for properties on **[Domain.com.au](www.domain.com.au)**.
+1. Search for properties on **[Domain.com.au](https://www.domain.com.au)**.
 2. Use the new filtering options in the menus to refine your search.
 3. Listings that include **preferences are highlighted** in tint between **green** (20% match) to **gold** (90% match).
 4. Listings that are **blacklisted or include excluded keywords are hidden** automatically from the page.

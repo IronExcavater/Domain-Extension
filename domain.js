@@ -30,8 +30,6 @@ const isBlacklist = (urlParams.get('blacklist') ?? '0') === '1';
 
 let isStudioType;
 
-let profileButton;
-
 const crossSvg = `
                 <g stroke-linecap="round" stroke-linejoin="round" transform="matrix(1.153397, 0, 0, 1.153397, -1.840759, -1.840759)">
                     <path d="M 6.042 17.958 L 17.958 6.042" style="transform-origin: 50% 50%; stroke-width: 2.5px;" transform="matrix(0, 1, -1, 0, 0, 0.000001)"/>
@@ -137,7 +135,6 @@ async function injectBase() {
 }
 
 function handleDesktopMenu(desktopMenu) {
-    console.log('Profile clicked');
     const profileObserver = new MutationObserver(async () => {
         const memberDropdown = document.querySelector('[data-testid="header-member__dropdown"]');
         if (!memberDropdown) return;
@@ -153,7 +150,6 @@ function handleDesktopMenu(desktopMenu) {
 }
 
 function handleMobileMenu() {
-    console.log('Profile clicked');
     const memberDropdown = document.querySelector('nav[data-testid="mobile-nav"][class="css-1o8190c"]');
     if (!memberDropdown) return;
     const dropdownList = memberDropdown.querySelector('ul');
@@ -368,6 +364,8 @@ async function injectSearch() {
         });
     }
 
+
+
     const allTypeInput = document.querySelector('input[type="checkbox"][name="All"]');
     const apartmentInput = document.querySelector('input[type="checkbox"][name="apartment"]');
     const studioInput = document.querySelector('input[type="checkbox"][name="apartment"][value="studio"]');
@@ -502,7 +500,7 @@ function configureStrataSlider(sliderWrapper) {
 
         let newStrataMax = Math.round(newPercent / 100 * strataMaxValue);
         newStrataMax = Math.round(newStrataMax / 100) * 100;
-        sliderLabel.textContent = newStrataMax === 1000 ? 'Any' : `$${newStrataMax}`;
+        sliderLabel.textContent = newStrataMax === strataMaxValue ? 'Any' : `$${newStrataMax}`;
     });
 
     document.addEventListener('mouseup', async () => {
@@ -582,7 +580,7 @@ async function injectBlacklist() {
     list.classList.add('css-1j3pg80');
 
     chrome.storage.local.get('blacklist', async (data) => {
-        for (const blacklist of data.blacklist) {
+        for (const blacklist of (data.blacklist ?? [])) {
             const listingCard = createListingCard(blacklist, await parseListing(blacklist));
             listingCard.id = blacklist;
             list.appendChild(listingCard);
@@ -694,7 +692,7 @@ async function parseMarkers(markers) {
 
     const listingPromises = Array.from(markerListings).map(async markerListing => {
         const {marker, nearestListing} = markerListing;
-        const blacklist = data.blacklist.includes(nearestListing.url);
+        const blacklist = (data.blacklist ?? []).includes(nearestListing.url);
         if (blacklist) {
             marker.style.display = 'none';
             return marker;
@@ -773,8 +771,14 @@ async function parseCards(cards) {
         }
     }
 
+    for (const slickTrack of document.querySelectorAll('.slick-track')) {
+        slickTrack.style.display = 'grid';
+        slickTrack.style.gridTemplateColumns = `repeat(${slickTrack.children.length}, 1fr)`;
+        slickTrack.style.gridAutoFlow = 'column';
+    }
+
     const listingPromises = Array.from(listings).map(async ([container, anchor]) => {
-        const blacklist = data.blacklist.includes(anchor.href);
+        const blacklist = (data.blacklist?? []).includes(anchor.href);
         if (blacklist) {
             container.style.display = 'none';
             return;
@@ -812,6 +816,13 @@ async function parseCards(cards) {
                 container.style.backgroundColor = preferredColor;
                 container.style.padding = '10px';
             }
+        } else {
+            container.style.padding = '0px';
+        }
+
+        if (container.classList.contains('slick-slide')) {
+            container.childNodes[0].style.height = '100%';
+            container.childNodes[0].childNodes[0].style.height = '100%';
         }
 
         if (!container.querySelector('button[data-testid="listing-card-blacklist"]')) {

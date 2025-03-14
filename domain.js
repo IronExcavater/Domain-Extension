@@ -1,6 +1,13 @@
 const parser = new DOMParser();
 
 const chromeStorageKeys = ['excludeKeys', 'strataMax', 'preferences', 'otherPreference', 'blacklist'];
+const defaultStorageValues = {
+    'excludeKeys': '',
+    'strataMax': 0,
+    'preferences': [],
+    'otherPreference': '',
+    'blacklist': []
+};
 
 const strataRegex = /(?<=strata.*)(\d+(?:,\d{3})*(?:\.\d{1,2})?)/i;
 const strataMaxValue = 2000;
@@ -46,9 +53,8 @@ const listObserver = new MutationObserver(async (mutations) => {
     for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
             Array.from(mutation.addedNodes)
-                .filter(card => card.nodeType === Node.ELEMENT_NODE)
+                .filter(card => card.nodeType === Node.ELEMENT_NODE && card.tagName === 'LI')
                 .forEach(card => cardChange.add(card));
-
             await scheduleParseCards();
         }
     }
@@ -64,17 +70,39 @@ const mapObserver = new MutationObserver(async (mutations) => {
             Array.from(mutation.addedNodes)
                 .filter(marker => marker.nodeType === Node.ELEMENT_NODE)
                 .forEach(marker => markerChange.add(marker));
-
             await scheduleParseMarkers();
         }
     }
 });
 
-console.log('Domain extension loaded');
-
 (async () => {
-    await injectDoc();
+    if (document.title === 'Access Denied') {
+        console.error('Domain extension failed to load');
+    } else {
+        console.log('Domain extension loaded');
+        await injectDoc();
+    }
 })();
+
+function waitForElement(container, selector, callback) {
+    const element = container.querySelector(selector);
+    if (element) {
+        callback(element);
+        return;
+    }
+
+    // MutationObserver callback function
+    const observerCallback = (mutationsList, observer) => {
+        const element = container.querySelector(selector);
+        if (element) {
+            callback(element);
+            observer.disconnect();
+        }
+    };
+
+    const observer = new MutationObserver(observerCallback);
+    observer.observe(container, {childList: true, subtree: true});
+}
 
 async function injectDoc() {
     await injectBase();
@@ -346,6 +374,14 @@ async function injectListing() {
 }
 
 async function injectSearch() {
+    const allTypeInput = document.querySelector('input[type="checkbox"][name="All"]');
+    const apartmentInput = document.querySelector('input[type="checkbox"][name="apartment"]');
+    const studioInput = document.querySelector('input[type="checkbox"][name="apartment"][value="studio"]');
+    if (allTypeInput) allTypeInput.addEventListener('input', () => handleTypeInput(allTypeInput, studioInput));
+    apartmentInput.addEventListener('input', () => handleTypeInput(allTypeInput, studioInput));
+    studioInput.addEventListener('input', () => handleTypeInput(allTypeInput, studioInput));
+    handleTypeInput(allTypeInput, studioInput);
+
     await observeSearch();
     const searchObserver = new MutationObserver(async () => {
         await observeSearch();
@@ -354,8 +390,8 @@ async function injectSearch() {
     searchObserver.observe(document.querySelector('[data-testid="page"]'), { childList: true, subtree: true });
 
     const submitButtons = [
-            ...document.querySelectorAll('button[type="submit"]'),
-        document.querySelector('button[type="button"][aria-label="perform search"]')
+        ...document.querySelectorAll('button[type="submit"]'),
+        document.querySelector('button[type="button"][aria-label="perform search"]'),
     ];
     for (const submitButton of submitButtons) {
         submitButton.addEventListener('click', async () => {
@@ -363,16 +399,6 @@ async function injectSearch() {
             if (markers) await parseMarkers(markers.children);
         });
     }
-
-
-
-    const allTypeInput = document.querySelector('input[type="checkbox"][name="All"]');
-    const apartmentInput = document.querySelector('input[type="checkbox"][name="apartment"]');
-    const studioInput = document.querySelector('input[type="checkbox"][name="apartment"][value="studio"]');
-    if (allTypeInput) allTypeInput.addEventListener('input', () => handleTypeInput(allTypeInput, studioInput));
-    apartmentInput.addEventListener('input', () => handleTypeInput(allTypeInput, studioInput));
-    studioInput.addEventListener('input', () => handleTypeInput(allTypeInput, studioInput));
-    handleTypeInput(allTypeInput, studioInput);
 }
 
 async function observeSearch() {
@@ -381,71 +407,37 @@ async function observeSearch() {
 
     if (!document.contains(listings)) {
         listings = null;
-        listObserver.disconnect();
         if (hasListings) {
             listings = hasListings;
             console.log('List found', listings.children.length, 'listings');
             await parseCards(listings.children);
-            listObserver.observe(listings, {childList: true, subtree: false});
+            listObserver.observe(listings, {childList: true});
         } else {
+            listObserver.disconnect();
             console.log('No list found');
         }
     }
     if (!document.contains(markers)) {
         markers = null;
-        mapObserver.disconnect();
         if (hasMarkers) {
             markers = hasMarkers;
             console.log('Map found with', markers.children.length, 'markers');
             await parseMarkers(markers.children);
-            mapObserver.observe(markers, {childList: true, subtree: false});
+            mapObserver.observe(markers, {childList: true});
         } else {
+            mapObserver.disconnect();
             console.log('No map found');
         }
     }
 }
 
-async function loadFiltersFromURL() {
-    try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const excludeKeys = urlParams.get('exclude') ?? '';
-        const strataMax = urlParams.get('stratamax') ? parseInt(urlParams.get('stratamax')) : strataMaxValue;
-        const preferences = urlParams.get('preferences') ? urlParams.get('preferences').split(',') : [];
-
-        await chrome.storage.local.set({excludeKeys, strataMax, preferences});
-    } catch (e) {
-        console.error('Error loading filters from url', e);
-    }
-}
-
-async function saveFiltersToURL() {
-    try {
-        const url = new URL(window.location.href);
-        const params = url.searchParams;
-
-        const data = await getDataWithRetry(chromeStorageKeys)
-
-        if (data.excludeKeys !== '') params.set('exclude', data.excludeKeys);
-        else params.delete('exclude');
-
-        if (data.strataMax !== strataMaxValue) params.set('stratamax', data.strataMax);
-        else params.delete('stratamax');
-
-        if (data.preferences && data.preferences.length > 0) params.set('preferences', data.preferences);
-        else params.delete('preferences');
-
-        window.history.pushState({}, '', url.toString());
-    } catch (e) {
-        console.error('Error saving filters to url', e);
-    }
-}
-
-async function getDataWithRetry(keys, retries = 5, delay = 1000) {
+async function getDataWithRetry(keys, retries = 2, delay = 1000) {
     try {
         return await chrome.storage.local.get(keys);
     } catch (e) {
         if (retries <= 0) {
-            throw new Error('Extension context invalidated after multiple retries.');
+            console.error('Extension context invalidated after multiple retries.');
+            return defaultStorageValues;
         } else {
             console.error(`Attempt accessing storage failed, retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -651,7 +643,7 @@ async function scheduleParseMarkers() {
 
     parseMarkersTimer = setTimeout(async () => {
         if (markerChange.size === 0) return;
-        await parseMarkers(markerChange);
+        await parseMarkers(markerChange.values().toArray());
         markerChange.clear();
     }, 500);
 }
@@ -751,7 +743,7 @@ async function scheduleParseCards() {
 
     parseCardsTimer = setTimeout(async () => {
         if (cardChange.size === 0) return;
-        await parseCards(cardChange);
+        await parseCards(cardChange.values().toArray());
         cardChange.clear();
     }, 500);
 }
@@ -771,10 +763,14 @@ async function parseCards(cards) {
         }
     }
 
-    for (const slickTrack of document.querySelectorAll('.slick-track')) {
-        slickTrack.style.display = 'grid';
-        slickTrack.style.gridTemplateColumns = `repeat(${slickTrack.children.length}, 1fr)`;
-        slickTrack.style.gridAutoFlow = 'column';
+    for (const slickTrack of document.querySelectorAll('.topspot .slick-track')) {
+        const stylesToApply = {
+            width: '',
+            display: 'grid',
+            gridTemplateColumns: `repeat(${slickTrack.children.length}, 1fr)`,
+            gridAutoFlow: 'column'
+        }
+        Object.assign(slickTrack.style, stylesToApply);
     }
 
     const listingPromises = Array.from(listings).map(async ([container, anchor]) => {
@@ -792,32 +788,18 @@ async function parseCards(cards) {
         const preferred = await preferListing(data, content);
         const preferredColor = preferColor(preferred);
 
-        if (preferred > 0) {
-            if (container.getAttribute('data-testid') === 'listing-card-child-listing') { // child listing
-                if (!container.parentElement.classList.contains('child-listing-wrapper')) {
-                    const wrapperOfWrapper = container.parentElement;
-                    wrapperOfWrapper.classList.add('css-hlnxku');
-
-                    const wrapper = document.createElement('div');
-                    wrapper.classList.add('child-listing-wrapper');
-                    container.classList.remove('css-hlnxku');
-                    anchor.style.textDecoration = 'none';
-                    anchor.style.color = 'inherit';
-                    container.style.backgroundColor = '#fff';
-
-                    wrapper.appendChild(container);
-                    wrapperOfWrapper.appendChild(wrapper);
-                }
-                const wrapper = container.parentElement;
-                wrapper.style.backgroundColor = preferredColor;
-                wrapper.style.padding = '6px';
-
-            } else { // normal listing
-                container.style.backgroundColor = preferredColor;
-                container.style.padding = '10px';
+        if (container.getAttribute('data-testid') === 'listing-card-child-listing') {
+            const stylesToApply = {
+                border: `${preferred > 0 ? '6px' : '0px'} ${preferredColor} solid`,
+                marginTop: preferred > 0 ? '0px' : '4px'
             }
+            Object.assign(container.style, stylesToApply);
         } else {
-            container.style.padding = '0px';
+            const stylesToApply = {
+                backgroundColor: preferred > 0 ? preferredColor : 'transparent',
+                padding: preferred > 0 ? '10px' : '0px'
+            }
+            Object.assign(container.style, stylesToApply);
         }
 
         if (container.classList.contains('slick-slide')) {
@@ -826,12 +808,11 @@ async function parseCards(cards) {
         }
 
         if (!container.querySelector('button[data-testid="listing-card-blacklist"]')) {
-            const shortlistButton = container.querySelector('button[data-testid^="listing-card-shortlist"]');
-            if (!shortlistButton) return;
-
-            const baseColor = shortlistButton.parentElement.getAttribute('data-testid') === 'listing-card-price-wrapper'
-                ? '#BBBEC4' : '#fff'
-            shortlistButton.after(createBlacklistButton(anchor.href, baseColor, '#fc0', '#ffa200'));
+            waitForElement(container, 'button[data-testid^="listing-card-shortlist"]', (shortlistButton) => {
+                const baseColor = shortlistButton.parentElement.getAttribute('data-testid') === 'listing-card-price-wrapper'
+                    ? '#BBBEC4' : '#fff'
+                shortlistButton.after(createBlacklistButton(anchor.href, baseColor, '#fc0', '#ffa200'));
+            })
         }
     });
 
@@ -872,7 +853,7 @@ function createBlacklistButton(href, baseColor, hoverColor, activeHoverColor) {
         event.preventDefault();
     });
     chrome.storage.local.onChanged.addListener(({ blacklist }) => {
-        isBlacklisted = updateBlacklist(button, blacklist.newValue ?? [], href,
+        if (blacklist) isBlacklisted = updateBlacklist(button, blacklist.newValue, href,
             isHovered, baseColor, hoverColor, activeHoverColor);
     });
 
@@ -956,20 +937,26 @@ async function parseListing(listingUrl) {
     }
 }
 
-async function fetchListing(listingUrl, retries = 3, delay = 1000) {
+async function fetchListing(listingUrl, retries = 3, delay = 1000, timeout = 5000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort('Fetch request timed out'), timeout);
+
     try {
-        const response = await fetch(listingUrl);
+        const response = await fetch(listingUrl, { signal: controller.signal });
         if (!response.ok) throw new Error('HTTP error, status: ' + response.status);
 
-        const text = await response.text()
+        const text = await response.text();
+        clearTimeout(timeoutId);
         return parser.parseFromString(text, 'text/html');
     } catch (e) {
+        clearTimeout(timeoutId);
         if (retries <= 0) {
-            throw new Error('Unable to fetch listing after multiple retries.');
+            console.error('Unable to fetch listing after multiple retries.');
+            return new Document();
         } else {
-            console.error(`Attempt fetching listing failed, retrying in ${delay}ms...`);
+            console.error(e + `, retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
-            return await fetchListing(listingUrl, retries - 1, delay);
+            return await fetchListing(listingUrl, retries - 1, delay * 2);
         }
     }
 }
